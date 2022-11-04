@@ -1,15 +1,10 @@
-mod pilot;
+mod light_communication;
 
 use captrs::*;
-
 use winapi::um::winuser::*;
 
 use std::collections::HashMap;
 use std::time::Instant;
-use std::net::UdpSocket;
-
-
-const LAMPS_PORT: &str = "38899";
 
 fn main() {
     // Initialize lamps IPs
@@ -17,34 +12,17 @@ fn main() {
         "Your IPs here"
     ];
 
+    // Initialize LightCommunication
+    let mut light_communication = light_communication::LightCommunication::new(lamps_ips);
 
-    // Initialize UDP Socket
-    println!("Initializing UDP Socket...");
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-
-    // Get previous lamps state
-    println!("Getting previous lamps state...");
-    let mut lamps_state: HashMap<String, String> = HashMap::new();
-    for ip in lamps_ips.iter() {
-        let msg = pilot::get_pilot_message();
-
-        socket.send_to(msg.as_bytes(), format!("{}:{}", ip, LAMPS_PORT)).unwrap();
-
-        let mut buf = [0; 1024];
-        let (amt, _) = socket.recv_from(&mut buf).unwrap();
-
-        let response = String::from_utf8_lossy(&buf[..amt]);
-        
-        lamps_state.insert(ip.to_string(), response.to_string());
-    }
-
-    let hola = lamps_state.iter().nth(0).unwrap();
-    pilot::set_pilot_message_from_previous_state(hola.1.to_string());
+    // Get initial states
+    println!("Getting initial states...");
+    light_communication.get_initial_states();
 
     // Initialize capture
     println!("Initializing capture...");
-    let mut capturer = Capturer::new(0).unwrap();
 
+    let mut capturer = Capturer::new(0).unwrap();
     let mut previous_frame = capturer.capture_frame().unwrap();
 
     loop {
@@ -60,22 +38,9 @@ fn main() {
 
         // Get average color
         let selected_color = get_average_color(frame);
-
         
         // Send color to lamps
-        for ip in lamps_ips.iter() {
-            let msg = pilot::set_pilot_message(
-                selected_color.0.into(),
-                selected_color.1.into(),
-                selected_color.2.into(), 
-                100,
-                true
-            );
-
-            let address = format!("{}:{}", ip, LAMPS_PORT);
-            
-            socket.send_to(&msg.as_bytes(), address).expect("Could not send message");
-        }
+        light_communication.set_color_all(selected_color, 0, 100, true);
 
         println!("Color set to: {:?} - {}ms", selected_color, start.elapsed().as_millis());
 
@@ -87,13 +52,7 @@ fn main() {
 
     // Restore previous lamps state
     println!("Restoring previous lamps state...");
-    for (ip, state) in lamps_state.iter() {
-        let msg = pilot::set_pilot_message_from_previous_state(state.to_string());
-
-        let address = format!("{}:{}", ip, LAMPS_PORT);
-        
-        socket.send_to(&msg.as_bytes(), address).expect("Could not send message");
-    }
+    light_communication.restore_initial_states();
 
     println!("Byebye!");
 }
