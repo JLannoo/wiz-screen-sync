@@ -5,12 +5,27 @@ use winapi::um::winuser::*;
 
 use std::collections::HashMap;
 use std::time::Instant;
+use std::fs;
 
 fn main() {
     // Initialize lamps IPs
-    let lamps_ips:Vec<&str> = vec![
-        "Your IPs here"
-    ];
+    let mut lamps_ips = Vec::new();
+    match fs::read_to_string("ips.txt") {
+        Ok(lamps) => {
+            for lamp in lamps.lines() {
+                lamps_ips.push(lamp.to_string());
+            }
+        }
+        Err(_) => {
+            println!("No ips.txt file found, please create one with the ips of the lamps you want to control");
+            return;
+        }
+    }
+    if lamps_ips.len() == 0 {
+        println!("No ips found in ips.txt, please add the ips of the lamps you want to control");
+        return;
+    }
+            
 
     // Initialize LightCommunication
     let mut light_communication = light_communication::LightCommunication::new(lamps_ips);

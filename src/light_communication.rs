@@ -20,6 +20,7 @@ impl LightCommunication {
     /// Create a new LightCommunication struct
     pub fn new(lights: Vec<String>) -> Self {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        socket.set_read_timeout(Some(std::time::Duration::from_millis(400))).unwrap();
         Self { lights, socket, lights_initial_state: HashMap::new() }
     }
 
@@ -71,7 +72,22 @@ impl LightCommunication {
                 .unwrap();
 
             let mut buf = [0; 1024];
-            let (amt, _) = self.socket.recv_from(&mut buf).unwrap();
+            let amt:usize;
+
+            match self.socket.recv_from(&mut buf) {
+                Ok((a, _)) => {
+                    amt = a;
+                }
+                Err(_) => {
+                    println!("Error communicating with lamp {}", ip);
+                    println!("Please make sure the IP is correct, the lamp is turned on and connected to the same network as this computer");
+                    println!("");
+                    println!("Press any key to exit...");
+                    
+                    std::io::stdin().read_line(&mut String::new()).unwrap();
+                    std::process::exit(1);
+                }
+            }
 
             let response = String::from_utf8_lossy(&buf[..amt]);
 
