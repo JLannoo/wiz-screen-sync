@@ -1,6 +1,6 @@
 mod light_communication;
 
-use captrs::*;
+use dxgcap::*;
 use winapi::um::winuser::*;
 
 use std::collections::HashMap;
@@ -37,8 +37,8 @@ fn main() {
     // Initialize capture
     println!("Initializing capture...");
 
-    let mut capturer = Capturer::new(0).unwrap();
-    let mut previous_frame = capturer.capture_frame().unwrap();
+    let mut capturer = DXGIManager::new(300).unwrap();
+    let (mut previous_frame, (width , height)) = capturer.capture_frame().unwrap();
 
     // Get this window
     let this_window = unsafe { GetForegroundWindow() };
@@ -48,7 +48,7 @@ fn main() {
         let start = Instant::now();
  
         // Capture frame or fallback to previous frame
-        let frame = capturer.capture_frame().unwrap_or(previous_frame);
+        let (frame, (_,_)) = capturer.capture_frame().unwrap_or((previous_frame, (width, height)));
         previous_frame = frame.clone();
 
         // Get most common color
@@ -83,7 +83,7 @@ fn main() {
 
 
 
-fn get_average_color(pixels: Vec<Bgr8>) -> (u64, u64, u64) {    
+fn get_average_color(pixels: Vec<BGRA8>) -> (u64, u64, u64) {    
     let mut r: u64 = 0;
     let mut g: u64 = 0;
     let mut b: u64 = 0;
@@ -112,7 +112,7 @@ fn get_average_color(pixels: Vec<Bgr8>) -> (u64, u64, u64) {
 }
 
 
-fn _get_most_common_color(pixels: Vec<Bgr8>) -> (u8, u8, u8) {
+fn _get_most_common_color(pixels: Vec<BGRA8>) -> (u8, u8, u8) {
     let mut colors: HashMap<(u8, u8, u8), u32> = HashMap::new();
 
     for pixel in pixels {
@@ -132,4 +132,14 @@ fn _get_most_common_color(pixels: Vec<Bgr8>) -> (u8, u8, u8) {
     }
 
     return most_common_color;
+}
+
+fn exit_with_error(error: String) {
+    println!("{}", error);
+    println!("");
+    println!("Press any key to exit...");
+
+    std::io::stdin().read_line(&mut String::new()).unwrap();
+
+    std::process::exit(1);
 }
