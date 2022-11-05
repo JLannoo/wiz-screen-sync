@@ -24,6 +24,15 @@ impl LightCommunication {
     }
 
     /// Set the color of all the lamps
+    /// 
+    /// You have to set either rgb or temp
+    /// 
+    /// # Arguments
+    /// * `ip` - The IP of the lamp
+    /// * `rgb` - The RGB color to set
+    /// * `temp` - The temperature to set
+    /// * `dimming` - The dimming to set
+    /// * `is_on` - If the lamp should be turned on or off
     pub fn set_color_all(&self, rgb: (u64, u64, u64), temp: u64, dimming: u64, is_on: bool) {
         for ip in self.lights.iter() {
             self.set_color(ip, rgb, temp, dimming, is_on)
@@ -31,6 +40,15 @@ impl LightCommunication {
     }
 
     /// Set the color of a specific lamp
+    /// 
+    /// You have to set either rgb or temp
+    /// 
+    /// # Arguments
+    /// * `ip` - The IP of the lamp
+    /// * `rgb` - The RGB color to set
+    /// * `temp` - The temperature to set
+    /// * `dimming` - The dimming to set
+    /// * `is_on` - If the lamp should be turned on or off
     fn set_color(&self, ip: &str, rgb: (u64, u64, u64), temp: u64, dimming: u64, is_on: bool) {
         let msg = self.set_pilot_message(rgb, temp, dimming, is_on);
 
@@ -39,7 +57,11 @@ impl LightCommunication {
             .unwrap();
     }
 
-    ///
+    /// Get the initial state of all the lamps
+    /// 
+    /// Store the initial state in `lights_initial_state`
+    /// 
+    /// This function has to be called before `restore_initial_states()`
     pub fn get_initial_states(&mut self) {
         for ip in self.lights.iter() {
             let msg = self.get_pilot_message();
@@ -58,6 +80,7 @@ impl LightCommunication {
         }
     }
 
+    /// Restore the initial state of all the lamps
     pub fn restore_initial_states(&self) {
         for (ip, is_on) in self.lights_initial_state.iter() {
             let is_on: Value = serde_json::from_str(is_on).unwrap();
@@ -82,7 +105,8 @@ impl LightCommunication {
         }
     }
 
-    fn set_pilot_message(&self, rgb: (u64, u64, u64), temp: u64, dimming: u64, is_on: bool) -> String {
+    /// Create the message to get the pilot state
+    fn set_pilot_message(&self, rgb: (u64, u64, u64), temp: u64, dimming: u64, mut is_on: bool) -> String {
         if temp != 0 {
             let msg = json!({
                 "method": "setPilot",
@@ -108,6 +132,7 @@ impl LightCommunication {
         }
     }
 
+    /// Create the message to get the pilot state
     fn get_pilot_message(&self) -> String {
         let msg = json!({
             "method": "getPilot",
