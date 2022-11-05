@@ -8,9 +8,7 @@ use std::time::Instant;
 
 fn main() {
     // Initialize lamps IPs
-    let lamps_ips:Vec<&str> = vec![
-        "Your IPs here"
-    ];
+    let lamps_ips:Vec<String> = (41..=42).map(|i| format!("192.168.100.{}", i)).collect();
 
     // Initialize LightCommunication
     let mut light_communication = light_communication::LightCommunication::new(lamps_ips);
@@ -28,7 +26,7 @@ fn main() {
     loop {
         // Start timer
         let start = Instant::now();
-
+ 
         // Capture frame or fallback to previous frame
         let frame = capturer.capture_frame().unwrap_or(previous_frame);
         previous_frame = frame.clone();
@@ -68,8 +66,10 @@ fn get_average_color(pixels: Vec<Bgr8>) -> (u64, u64, u64) {
     let filtered_pixels = pixels.iter().filter(|pixel| pixel.r != 0 || pixel.g != 0 || pixel.b != 0);
     let pixel_count = filtered_pixels.clone().count() as u64;
 
-    if pixel_count == 0 {
-        return (0, 0, 0);
+    // If amount of pixels after filtering out black is less than 5%, return (1,1,1).
+    // (0,0,0) is not accepted by the lamps
+    if pixel_count < pixels.len() as u64 * 5 / 100 {
+        return (1, 1, 1);
     }
     
     for pixel in filtered_pixels {
