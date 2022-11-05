@@ -66,9 +66,9 @@ fn get_average_color(pixels: Vec<Bgr8>) -> (u64, u64, u64) {
     let filtered_pixels = pixels.iter().filter(|pixel| pixel.r != 0 || pixel.g != 0 || pixel.b != 0);
     let pixel_count = filtered_pixels.clone().count() as u64;
 
-    // If amount of pixels after filtering out black is less than 5%, return (1,1,1).
+    // If amount of pixels after filtering out black is less than 10%, return (1,1,1).
     // (0,0,0) is not accepted by the lamps
-    if pixel_count < pixels.len() as u64 * 5 / 100 {
+    if pixel_count < pixels.len() as u64 * 10 / 100 {
         return (1, 1, 1);
     }
     

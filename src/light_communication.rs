@@ -106,7 +106,7 @@ impl LightCommunication {
     }
 
     /// Create the message to get the pilot state
-    fn set_pilot_message(&self, rgb: (u64, u64, u64), temp: u64, dimming: u64, mut is_on: bool) -> String {
+    fn set_pilot_message(&self, rgb: (u64, u64, u64), temp: u64, dimming: u64, is_on: bool) -> String {
         if temp != 0 {
             let msg = json!({
                 "method": "setPilot",
