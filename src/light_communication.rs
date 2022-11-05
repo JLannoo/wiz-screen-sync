@@ -3,6 +3,8 @@ use std::collections::HashMap;
 
 use serde_json::*;
 
+use crate::exit_with_error;
+
 const LAMPS_PORT: &str = "38899";
 
 /// This struct is used to communicate with the lamps
@@ -67,10 +69,13 @@ impl LightCommunication {
         for ip in self.lights.iter() {
             let msg = self.get_pilot_message();
 
-            self.socket
-                .send_to(msg.as_bytes(), format!("{}:{}", ip, LAMPS_PORT))
-                .unwrap();
-
+            match self.socket.send_to(msg.as_bytes(), format!("{}:{}", ip, LAMPS_PORT)) {
+                Ok(_) => {},
+                Err(_) => {
+                    exit_with_error(&format!("Error communicating with '{}' \nPlease make sure the IP is correct, the lamp is turned on and connected to the same network as this computer", ip));
+                }
+            }
+                
             let mut buf = [0; 1024];
             let amt:usize;
 
@@ -79,13 +84,8 @@ impl LightCommunication {
                     amt = a;
                 }
                 Err(_) => {
-                    println!("Error communicating with lamp {}", ip);
-                    println!("Please make sure the IP is correct, the lamp is turned on and connected to the same network as this computer");
-                    println!("");
-                    println!("Press any key to exit...");
-                    
-                    std::io::stdin().read_line(&mut String::new()).unwrap();
-                    std::process::exit(1);
+                    amt = 0;
+                    exit_with_error(&format!("Error communicating with {} \nPlease make sure the IP is correct, the lamp is turned on and connected to the same network as this computer", ip));
                 }
             }
 

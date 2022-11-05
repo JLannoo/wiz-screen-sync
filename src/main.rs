@@ -17,13 +17,11 @@ fn main() {
             }
         }
         Err(_) => {
-            println!("No ips.txt file found, please create one with the ips of the lamps you want to control");
-            return;
+            exit_with_error("Error reading ips.txt");
         }
     }
     if lamps_ips.len() == 0 {
-        println!("No ips found in ips.txt, please add the ips of the lamps you want to control");
-        return;
+        exit_with_error("No lamps found in ips.txt");
     }
             
 
@@ -134,10 +132,10 @@ fn _get_most_common_color(pixels: Vec<BGRA8>) -> (u8, u8, u8) {
     return most_common_color;
 }
 
-fn exit_with_error(error: String) {
+fn exit_with_error(error: &str) {
     println!("{}", error);
     println!("");
-    println!("Press any key to exit...");
+    println!("Press enter to exit...");
 
     std::io::stdin().read_line(&mut String::new()).unwrap();
 
