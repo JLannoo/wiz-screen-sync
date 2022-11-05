@@ -8,7 +8,9 @@ use std::time::Instant;
 
 fn main() {
     // Initialize lamps IPs
-    let lamps_ips:Vec<String> = (41..=42).map(|i| format!("192.168.100.{}", i)).collect();
+    let lamps_ips:Vec<&str> = vec![
+        "Your IPs here"
+    ];
 
     // Initialize LightCommunication
     let mut light_communication = light_communication::LightCommunication::new(lamps_ips);
@@ -22,6 +24,9 @@ fn main() {
 
     let mut capturer = Capturer::new(0).unwrap();
     let mut previous_frame = capturer.capture_frame().unwrap();
+
+    // Get this window
+    let this_window = unsafe { GetForegroundWindow() };
 
     loop {
         // Start timer
@@ -42,10 +47,16 @@ fn main() {
 
         println!("Color set to: {:?} - {}ms", selected_color, start.elapsed().as_millis());
 
-        // If ESC is pressed, exit
-        unsafe {if GetKeyState(VK_ESCAPE) != 0 {
-            break;
-        }}
+        // If ESC is pressed (high order bit is set)
+        // and active window is this window
+        unsafe {
+            if GetKeyState(VK_ESCAPE) & 0x1000 != 0{
+                let current_window = GetForegroundWindow();
+                if current_window == this_window {
+                    break;
+                }
+            }  
+        } 
     }
 
     // Restore previous lamps state
