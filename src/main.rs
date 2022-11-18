@@ -41,6 +41,10 @@ fn main() {
     println!("Getting initial states...");
     light_communication.get_initial_states();
 
+    // Set fade speed to 0
+    println!("Setting fade speed to 0...");
+    light_communication.set_fade_speed_all(0, 0);
+
     // Initialize capture
     println!("Initializing capture...");
 

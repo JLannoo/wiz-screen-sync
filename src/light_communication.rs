@@ -26,6 +26,22 @@ impl LightCommunication {
         Self { lights, socket, lights_initial_state: HashMap::new() }
     }
 
+    /// Set the color of a specific lamp
+    /// 
+    /// You have to set either rgb or temp
+    /// 
+    /// # Arguments
+    /// * `ip` - The IP of the lamp
+    /// * `rgb` - The RGB color to set
+    /// * `temp` - The temperature to set
+    /// * `dimming` - The dimming to set
+    /// * `is_on` - If the lamp should be turned on or off
+    fn set_color(&self, ip: &str, rgb: (u64, u64, u64), temp: u64, dimming: u64, is_on: bool) {
+        let msg = self.set_pilot_message(rgb, temp, dimming, is_on);
+
+        self.send_message_to_light(msg, ip);
+    }
+
     /// Set the color of all the lamps
     /// 
     /// You have to set either rgb or temp
@@ -42,22 +58,28 @@ impl LightCommunication {
         }
     }
 
-    /// Set the color of a specific lamp
-    /// 
-    /// You have to set either rgb or temp
+    /// Set the dimming time of a specific lamp
     /// 
     /// # Arguments
     /// * `ip` - The IP of the lamp
-    /// * `rgb` - The RGB color to set
-    /// * `temp` - The temperature to set
-    /// * `dimming` - The dimming to set
-    /// * `is_on` - If the lamp should be turned on or off
-    fn set_color(&self, ip: &str, rgb: (u64, u64, u64), temp: u64, dimming: u64, is_on: bool) {
-        let msg = self.set_pilot_message(rgb, temp, dimming, is_on);
+    /// * `fade_in` - The fade in time
+    /// * `fade_out` - The fade out time
+    fn set_fade_speed(&self, ip: &str, fade_in: u64, fade_out: u64) {
+        let msg = self.set_user_config_message(fade_in, fade_out);
 
-        self.socket
-            .send_to(msg.as_bytes(), format!("{}:{}", ip, LAMPS_PORT))
-            .unwrap();
+        self.send_message_to_light(msg, ip);
+    }
+
+    /// Set the dimming time of all lamps
+    /// 
+    /// # Arguments
+    /// * `ip` - The IP of the lamp
+    /// * `fade_in` - The fade in time
+    /// * `fade_out` - The fade out time
+    pub fn set_fade_speed_all(&self, fade_in: u64, fade_out: u64) {
+        for ip in self.lights.iter() {
+            self.set_fade_speed(ip, fade_in, fade_out)
+        }
     }
 
     /// Get the initial state of all the lamps
@@ -67,32 +89,22 @@ impl LightCommunication {
     /// This function has to be called before `restore_initial_states()`
     pub fn get_initial_states(&mut self) {
         for ip in self.lights.iter() {
-            let msg = self.get_pilot_message();
+            // Send getPilot message
+            let get_pilot_reponse = self.send_message_to_light(self.get_pilot_message(), ip);
 
-            match self.socket.send_to(msg.as_bytes(), format!("{}:{}", ip, LAMPS_PORT)) {
-                Ok(_) => {},
-                Err(_) => {
-                    exit_with_error(&format!("Error communicating with '{}' \nPlease make sure the IP is correct, the lamp is turned on and connected to the same network as this computer", ip));
-                }
-            }
-                
-            let mut buf = [0; 1024];
-            let amt:usize;
+            // Send getUserConfig message
+            let get_user_config_reponse = self.send_message_to_light(self.get_user_config_message(), ip);
 
-            match self.socket.recv_from(&mut buf) {
-                Ok((a, _)) => {
-                    amt = a;
-                }
-                Err(_) => {
-                    amt = 0;
-                    exit_with_error(&format!("Error communicating with {} \nPlease make sure the IP is correct, the lamp is turned on and connected to the same network as this computer", ip));
-                }
-            }
+            // Parse response
+            let mut parsed_pilot: Value = serde_json::from_str(&get_pilot_reponse).unwrap();
+            let parsed_user_config: Value = serde_json::from_str(&get_user_config_reponse).unwrap();
 
-            let response = String::from_utf8_lossy(&buf[..amt]);
+            // Add fadeIn and fadeOut from userConfig to pilot[result]
+            parsed_pilot["result"]["fadeIn"] = parsed_user_config["result"]["fadeIn"].clone();
+            parsed_pilot["result"]["fadeOut"] = parsed_user_config["result"]["fadeOut"].clone();
 
             self.lights_initial_state
-                .insert(ip.to_string(), response.to_string());
+                .insert(ip.to_string(), parsed_pilot.to_string());
         }
     }
 
@@ -107,18 +119,50 @@ impl LightCommunication {
                 let temp = result["temp"].as_u64().unwrap();
                 let dimming = result["dimming"].as_u64().unwrap();
                 let is_on: bool = result["state"].as_bool().unwrap();
+                let fade_in = result["fadeIn"].as_u64().unwrap();
+                let fade_out = result["fadeOut"].as_u64().unwrap();
 
                 self.set_color(ip, (0, 0, 0), temp, dimming, is_on);
+                self.set_fade_speed(ip, fade_in, fade_out)
             } else {
                 let r = result["r"].as_u64().unwrap();
                 let g = result["g"].as_u64().unwrap();
                 let b = result["b"].as_u64().unwrap();
                 let dimming = result["dimming"].as_u64().unwrap();
                 let is_on: bool = result["state"].as_bool().unwrap();
+                let fade_in = result["fadeIn"].as_u64().unwrap();
+                let fade_out = result["fadeOut"].as_u64().unwrap();
 
                 self.set_color(ip, (r, g, b), 0, dimming, is_on);
+                self.set_fade_speed(ip, fade_in, fade_out)
             }
         }
+    }
+
+    /// Send a message to a lamp and return the response
+    fn send_message_to_light(&self, msg: String, ip: &str) -> String {
+        match self.socket.send_to(msg.as_bytes(), format!("{}:{}", ip, LAMPS_PORT)) {
+            Ok(_) => {},
+            Err(_) => {
+                exit_with_error(&format!("Error communicating with {} \nPlease make sure the IP is correct, the lamp is turned on and connected to the same network as this computer", ip));
+            }
+        }
+
+        let mut buf = [0; 1024];
+        let amt:usize;
+
+        // Receive response
+        match self.socket.recv_from(&mut buf) {
+            Ok((a, _)) => {
+                amt = a;
+            }
+            Err(_) => {
+                amt = 0;
+                exit_with_error(&format!("Error communicating with {} \nPlease make sure the IP is correct, the lamp is turned on and connected to the same network as this computer", ip));
+            }
+        }
+
+        String::from_utf8_lossy(&buf[..amt]).to_string()
     }
 
     /// Create the message to get the pilot state
@@ -153,6 +197,27 @@ impl LightCommunication {
         let msg = json!({
             "method": "getPilot",
             "params": {}
+        });
+        return msg.to_string();
+    }
+
+    /// Create the message to get the user config
+    fn get_user_config_message(&self) -> String {
+        let msg = json!({
+            "method": "getUserConfig",
+            "params": {}
+        });
+        return msg.to_string();
+    }
+
+    /// Create the message to set the dimming time
+    fn set_user_config_message(&self, fade_in: u64, fade_out: u64) -> String {
+        let msg = json!({
+            "method": "setUserConfig",
+            "params": {
+                "fadeIn": fade_in,
+                "fadeOut": fade_out
+            }
         });
         return msg.to_string();
     }
