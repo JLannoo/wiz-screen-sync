@@ -2,10 +2,19 @@ mod light_communication;
 
 use dxgcap::*;
 use winapi::um::winuser::*;
+use crossterm::{queue , terminal , cursor};
 
 use std::collections::HashMap;
 use std::time::Instant;
 use std::fs;
+
+/// Improves performance by skipping pixels. Reduces color accuracy.
+/// 1 = no skipping, 2 = skip every other pixel, etc.
+const PIXEL_SKIPPING: usize = 1;
+
+/// If the color variation between iterations is lower than this value, 
+/// the program will not send a new color to the lamps
+const COLOR_VARIATION_THRESHOLD: u64 = 20;  // 0 = no variation, 255 = max variation
 
 fn main() {
     // Initialize lamps IPs
@@ -40,7 +49,11 @@ fn main() {
 
     // Get this window
     let this_window = unsafe { GetForegroundWindow() };
-
+    
+    // Clear terminal
+    queue!(std::io::stdout(), terminal::Clear(terminal::ClearType::All)).unwrap();
+    
+    let mut previous_color = (0, 0, 0);
     loop {
         // Start timer
         let start = Instant::now();
@@ -56,9 +69,13 @@ fn main() {
         let selected_color = get_average_color(frame);
         
         // Send color to lamps
-        light_communication.set_color_all(selected_color, 0, 100, true);
+        if calculate_color_variation(selected_color, previous_color) > COLOR_VARIATION_THRESHOLD {
+            light_communication.set_color_all(selected_color, 0, 100, true);
 
-        println!("Color set to: {:?} - {}ms", selected_color, start.elapsed().as_millis());
+            print_color_and_instructions(selected_color, start);
+
+            previous_color = selected_color;
+        }
 
         // If ESC is pressed (high order bit is set)
         // and active window is this window
@@ -80,6 +97,13 @@ fn main() {
 }
 
 
+fn calculate_color_variation(rgb: (u64, u64, u64), previous_rgb: (u64, u64, u64)) -> u64 {
+    let r = (rgb.0 as i64 - previous_rgb.0 as i64).abs() as u64;
+    let g = (rgb.1 as i64 - previous_rgb.1 as i64).abs() as u64;
+    let b = (rgb.2 as i64 - previous_rgb.2 as i64).abs() as u64;
+
+    return r + g + b;
+}
 
 fn get_average_color(pixels: Vec<BGRA8>) -> (u64, u64, u64) {    
     let mut r: u64 = 0;
@@ -96,7 +120,7 @@ fn get_average_color(pixels: Vec<BGRA8>) -> (u64, u64, u64) {
         return (1, 1, 1);
     }
     
-    for pixel in filtered_pixels {
+    for pixel in filtered_pixels.step_by(PIXEL_SKIPPING) {
         r += pixel.r as u64;
         g += pixel.g as u64;
         b += pixel.b as u64;
@@ -108,7 +132,6 @@ fn get_average_color(pixels: Vec<BGRA8>) -> (u64, u64, u64) {
         (b / pixel_count),
     );
 }
-
 
 fn _get_most_common_color(pixels: Vec<BGRA8>) -> (u8, u8, u8) {
     let mut colors: HashMap<(u8, u8, u8), u32> = HashMap::new();
@@ -132,6 +155,7 @@ fn _get_most_common_color(pixels: Vec<BGRA8>) -> (u8, u8, u8) {
     return most_common_color;
 }
 
+
 fn exit_with_error(error: &str) {
     println!("{}", error);
     println!("");
@@ -140,4 +164,14 @@ fn exit_with_error(error: &str) {
     std::io::stdin().read_line(&mut String::new()).unwrap();
 
     std::process::exit(1);
+}
+
+fn print_color_and_instructions(rgb: (u64, u64, u64), time_start: Instant) {
+    // set cursor to 0,0
+    queue!(std::io::stdout(), cursor::MoveTo(0, 0)).unwrap();
+    // clear line
+    queue!(std::io::stdout(), terminal::Clear(terminal::ClearType::CurrentLine)).unwrap();
+    println!("Color set to: {:?} - {}ms", rgb, time_start.elapsed().as_millis());
+    println!();
+    println!("Press 'ESC' to quit");
 }
